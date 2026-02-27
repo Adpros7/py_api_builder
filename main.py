@@ -1,4 +1,7 @@
-from typing import Any, Literal
+from typing import Any, Literal, TypeAlias
+
+param: TypeAlias = str
+returnType: TypeAlias = type | Literal["json"]
 
 
 class APIBuilder:
@@ -26,7 +29,7 @@ class APIBuilder:
     def add_endpoint(
         self,
         name: str,
-        returntype: type | Literal["json"],
+        returntype: returnType | dict[param, returnType],
         api_type: Literal["get", "post"],
         extra_code: str = "",
     ):
@@ -35,7 +38,7 @@ class APIBuilder:
 
         Parameters:
             name (str): The name of the endpoint.
-            returntype (type | Literal["json"]): The type of the data returned by the endpoint.
+            returntype (type | Literal["json"]): The type of the data returned by the endpoint. Alternatively, a dictionary mapping parameter names to return types. This is used for over loading.
             api_type (Literal["get", "post"]): The type of the API request.
             extra_code (str): Any extra code to run before making the request.
 
@@ -48,9 +51,8 @@ class APIBuilder:
             return {returntype if returntype != "json" else ""}(requests.{api_type}({self.url}).{"text" if returntype != "json" else "json"})
         """
 
-
     def create_returntype(self, name: str, x: Any):
-        code.
+        pass
     def get_code(self):
         """
         Returns the code for the API.
