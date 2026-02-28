@@ -1,20 +1,52 @@
+"""
+py-api-builder: A code generator for creating Flask API wrappers.
+
+This module provides the ``APIBuilder`` class, which programmatically
+generates Flask application code that proxies requests to an external API.
+It supports GET and POST endpoints with configurable return types.
+
+Type Aliases:
+    param: Alias for ``str``, representing an endpoint parameter name.
+    returnType: Alias for ``type | Literal["json"]``, representing the
+        return type of a generated endpoint. Use a Python type (e.g. ``str``,
+        ``int``) to cast the response text, or ``"json"`` to parse the
+        response as JSON.
+"""
+
 from typing import Any, Literal, TypeAlias
 
 param: TypeAlias = str
+"""Alias for ``str`` — an endpoint parameter name."""
+
 returnType: TypeAlias = type | Literal["json"]
+"""Alias for ``type | Literal["json"]`` — the return type of a generated endpoint."""
 
 
 class APIBuilder:
+    """A code generator that builds Flask applications proxying an external API.
+
+    ``APIBuilder`` accumulates Python source code for a Flask app.  Call
+    :meth:`add_endpoint` one or more times to register routes, then call
+    :meth:`get_code` to retrieve the complete generated source.
+
+    Attributes:
+        code (str): The accumulated Python source code for the Flask app.
+        url (str): The quoted URL of the external API, ready for embedding
+            in the generated source.
+
+    Example::
+
+        builder = APIBuilder("my_api", "https://api.example.com/data")
+        builder.add_endpoint("fetch_data", "json", "get")
+        print(builder.get_code())
+    """
+
     def __init__(self, name: str, url: str) -> None:
-        """
-        Initializes the API builder.
+        """Initialize the API builder.
 
-        Parameters:
-            name (str): The name of the API.
-            url (str): The URL of the API.
-
-        Returns:
-            None
+        Args:
+            name: The name of the Flask application.
+            url: The base URL of the external API to proxy.
         """
         self.code: str = f"""
         from flask import Flask
@@ -32,32 +64,69 @@ class APIBuilder:
         returntype: returnType | dict[param, returnType],
         api_type: Literal["get", "post"],
         extra_code: str = "",
-    ):
-        """
-        Adds an endpoint to the API.
+    ) -> None:
+        """Add a Flask route that proxies a request to the external API.
 
-        Parameters:
-            name (str): The name of the endpoint.
-            returntype (type | Literal["json"]): The type of the data returned by the endpoint. Alternatively, a dictionary mapping parameter names to return types. This is used for over loading.
-            api_type (Literal["get", "post"]): The type of the API request.
-            extra_code (str): Any extra code to run before making the request.
+        The generated function will issue an HTTP request using the
+        ``requests`` library and cast or parse the response according to
+        *returntype*.
+
+        Args:
+            name: The function (and route) name for the generated endpoint.
+            returntype: The return type of the endpoint.  Pass a Python type
+                (e.g. ``str``) to cast the response text, or ``"json"`` to
+                parse the response as JSON.  A ``dict[param, returnType]``
+                can be provided for overloaded endpoints.
+            api_type: The HTTP method to use — ``"get"`` or ``"post"``.
+            extra_code: Optional Python source to insert before the request
+                call inside the generated function body.
+        """
+        if not isinstance(returntype, dict):
+            self.code += f"""
+            def {name}() -> {returntype}:
+                {extra_code}
+                return {returntype if returntype != "json" else ""}(requests.{api_type}({self.url}).{"text" if returntype != "json" else "json"})
+
+
+            """
+
+        else:
+            self.code += f"""
+            """
+
+    def create_returntype(self, name: str, x: Any) -> None:
+        """Create a custom return type for use in generated endpoints.
+
+        .. note::
+            This method is not yet implemented.
+
+        Args:
+            name: The name of the custom
+            type to define.
+            x: The value or schema used to derive the type.
+        """
+        pass
+
+    def get_code(self) -> str:
+        """Return the complete generated Flask application source code.
 
         Returns:
-            None
-        """
-        self.code += f"""
-        def {name}() -> {returntype}:
-            {extra_code}
-            return {returntype if returntype != "json" else ""}(requests.{api_type}({self.url}).{"text" if returntype != "json" else "json"})
-        """
+            The accumulated Python source as a single string, ready to be
+            written to a ``.py`` file or executed.
 
-    def create_returntype(self, name: str, x: Any):
-        pass
-    def get_code(self):
-        """
-        Returns the code for the API.
-        """
+        Example::
 
+            builder = APIBuilder("weather", "https://api.weather.com/v1")
+            builder.add_endpoint("current", "json", "get")
+            builder.add_endpoint("forecast", str, "get")
+
+            # Write to a file
+            with open("weather_api.py", "w") as f:
+                f.write(builder.get_code())
+
+            # Or just print it
+            print(builder.get_code())
+        """
         return self.code
 
 
